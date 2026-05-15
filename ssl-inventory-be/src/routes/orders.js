@@ -16,15 +16,7 @@ const fetchOrderItems = (trx, orderId) =>
     .select(...ORDER_ITEMS_SELECT)
     .where('order_items.order_id', orderId);
 
-/** Restore inventory for all items in an order (used on delete / before re-save on edit). */
-const restoreInventory = async (trx, orderId) => {
-  const rows = await trx('order_items').where({ order_id: orderId });
-  for (const row of rows) {
-    await trx('items').where({ id: row.item_id }).increment('quantity', row.quantity);
-  }
-};
-
-/** Validate stock and deduct inventory for each item. Throws on insufficient stock. */
+/** Deduct inventory — throws with a clear message on insufficient stock. */
 const deductInventory = async (trx, items) => {
   for (const item of items) {
     const inv = await trx('items').where({ id: item.item_id }).first();
@@ -38,11 +30,24 @@ const deductInventory = async (trx, items) => {
   }
 };
 
+/** Restore inventory for all items on an order. */
+const restoreInventory = async (trx, orderId) => {
+  const rows = await trx('order_items').where({ order_id: orderId });
+  for (const row of rows) {
+    await trx('items').where({ id: row.item_id }).increment('quantity', row.quantity);
+  }
+};
+
+const VALID_TRANSITIONS = {
+  pending: ['complete'],
+  complete: ['returned'],
+  returned: [],
+};
+
 // GET /orders
 router.get('/', async (req, res) => {
   try {
     const orders = await db('orders').orderBy('created_at', 'desc');
-    // attach item count to each order
     const withCounts = await Promise.all(
       orders.map(async (o) => {
         const [{ cnt }] = await db('order_items').where({ order_id: o.id }).count('id as cnt');
@@ -67,7 +72,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /orders — creates order AND deducts inventory
+// POST /orders — creates as PENDING; no inventory change
 router.post('/', async (req, res) => {
   try {
     const { order_name, client_name, phone, email, address, delivery_type, items } = req.body;
@@ -84,10 +89,10 @@ router.post('/', async (req, res) => {
         email: email || null,
         address: address || null,
         delivery_type: delivery_type || null,
+        status: 'pending',
       });
 
       if (items && items.length > 0) {
-        await deductInventory(trx, items);
         await trx('order_items').insert(
           items.map((item) => ({ order_id: id, item_id: item.item_id, quantity: item.quantity })),
         );
@@ -104,7 +109,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT /orders/:id — restores old inventory, applies new
+// PUT /orders/:id — edit details/items; only allowed while PENDING (no inventory held yet)
 router.put('/:id', async (req, res) => {
   try {
     const { order_name, client_name, phone, email, address, delivery_type, items } = req.body;
@@ -113,12 +118,11 @@ router.put('/:id', async (req, res) => {
     await db.transaction(async (trx) => {
       const existing = await trx('orders').where({ id: req.params.id }).first();
       if (!existing) throw new Error('Order not found');
+      if (existing.status !== 'pending') {
+        throw new Error('Only pending orders can be edited');
+      }
 
-      // Restore inventory for items being replaced
-      await restoreInventory(trx, req.params.id);
       await trx('order_items').where({ order_id: req.params.id }).del();
-
-      // Update the order record
       await trx('orders').where({ id: req.params.id }).update({
         order_name,
         client_name,
@@ -129,9 +133,7 @@ router.put('/:id', async (req, res) => {
         updated_at: trx.fn.now(),
       });
 
-      // Insert new items and deduct inventory
       if (items && items.length > 0) {
-        await deductInventory(trx, items);
         await trx('order_items').insert(
           items.map((item) => ({ order_id: req.params.id, item_id: item.item_id, quantity: item.quantity })),
         );
@@ -149,13 +151,53 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /orders/:id — restores inventory before deleting
+// PATCH /orders/:id/status — transition status with inventory side-effects
+router.patch('/:id/status', async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    let result;
+    await db.transaction(async (trx) => {
+      const order = await trx('orders').where({ id: req.params.id }).first();
+      if (!order) throw new Error('Order not found');
+
+      const allowed = VALID_TRANSITIONS[order.status] || [];
+      if (!allowed.includes(status)) {
+        throw new Error(`Cannot transition from "${order.status}" to "${status}"`);
+      }
+
+      if (status === 'complete') {
+        const orderItems = await trx('order_items').where({ order_id: req.params.id });
+        await deductInventory(trx, orderItems.map((i) => ({ item_id: i.item_id, quantity: i.quantity })));
+      }
+
+      if (status === 'returned') {
+        await restoreInventory(trx, req.params.id);
+      }
+
+      await trx('orders').where({ id: req.params.id }).update({ status, updated_at: trx.fn.now() });
+
+      const updated = await trx('orders').where({ id: req.params.id }).first();
+      const orderItems = await fetchOrderItems(trx, req.params.id);
+      result = { ...updated, items: orderItems };
+    });
+
+    res.json(result);
+  } catch (err) {
+    const status = err.message === 'Order not found' ? 404 : 400;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// DELETE /orders/:id — restores inventory only if order was COMPLETE
 router.delete('/:id', async (req, res) => {
   try {
     await db.transaction(async (trx) => {
       const order = await trx('orders').where({ id: req.params.id }).first();
       if (!order) throw new Error('Order not found');
-      await restoreInventory(trx, req.params.id);
+      if (order.status === 'complete') {
+        await restoreInventory(trx, req.params.id);
+      }
       await trx('orders').where({ id: req.params.id }).del();
     });
     res.status(204).send();

@@ -9,18 +9,22 @@ function formatDate(iso: string) {
   });
 }
 
-const deliveryBadge = (type: Order['delivery_type']) => {
-  if (type === 'will_call')
-    return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
-  if (type === 'install')
-    return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300';
-  return '';
+const STATUS_META: Record<Order['status'], { label: string; cls: string }> = {
+  pending:  { label: '⏳ Pending',  cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
+  complete: { label: '✅ Complete', cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+  returned: { label: '↩ Returned',  cls: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400' },
+};
+
+const DELIVERY_META: Record<string, { label: string; cls: string }> = {
+  will_call: { label: '🚗 Will Call', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+  install:   { label: '🔧 Install',   cls: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
 };
 
 export default function OrderDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [order, setOrder] = useState<Order | null>(null);
+  const [transitioning, setTransitioning] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -28,8 +32,32 @@ export default function OrderDetail() {
     orderApi.getOne(Number(id)).then(setOrder).catch(() => navigate('/orders'));
   }, [id, navigate]);
 
+  const handleStatusTransition = async (newStatus: 'complete' | 'returned') => {
+    if (!order) return;
+    const confirmMsg =
+      newStatus === 'complete'
+        ? `Mark "${order.order_name}" as Complete?\n\nThis will deduct the ordered items from inventory.`
+        : `Mark "${order.order_name}" as Returned?\n\nThis will restore all items back to inventory.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setTransitioning(true);
+    try {
+      const updated = await orderApi.updateStatus(order.id, newStatus);
+      setOrder(updated);
+    } catch (err: any) {
+      alert(err.response?.data?.error ?? 'Failed to update status');
+    } finally {
+      setTransitioning(false);
+    }
+  };
+
   const handleDelete = async () => {
-    if (!order || !window.confirm(`Delete order "${order.order_name}"? This will return all items to inventory.`)) return;
+    if (!order) return;
+    const msg =
+      order.status === 'complete'
+        ? `Delete "${order.order_name}"? Items will be restored to inventory.`
+        : `Delete "${order.order_name}"?`;
+    if (!window.confirm(msg)) return;
     setDeleting(true);
     try {
       await orderApi.delete(order.id);
@@ -41,6 +69,9 @@ export default function OrderDetail() {
   };
 
   if (!order) return <div className="text-gray-400 py-12 text-center">Loading…</div>;
+
+  const status = STATUS_META[order.status];
+  const delivery = order.delivery_type ? DELIVERY_META[order.delivery_type] : null;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -55,21 +86,48 @@ export default function OrderDetail() {
           </button>
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{order.order_name}</h1>
-            {order.delivery_type && (
-              <span className={`text-sm px-2.5 py-1 rounded-full font-medium ${deliveryBadge(order.delivery_type)}`}>
-                {order.delivery_type === 'will_call' ? '🚗 Will Call' : '🔧 Install'}
+            <span className={`text-sm px-2.5 py-1 rounded-full font-medium ${status.cls}`}>
+              {status.label}
+            </span>
+            {delivery && (
+              <span className={`text-sm px-2.5 py-1 rounded-full font-medium ${delivery.cls}`}>
+                {delivery.label}
               </span>
             )}
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Order #{order.id} · {formatDate(order.created_at)}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+            Order #{order.id} · {formatDate(order.created_at)}
+          </p>
         </div>
-        <div className="flex gap-2 shrink-0">
-          <Link
-            to={`/orders/${order.id}/edit`}
-            className="text-sm px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-          >
-            Edit
-          </Link>
+
+        {/* Action buttons */}
+        <div className="flex gap-2 shrink-0 flex-wrap justify-end">
+          {order.status === 'pending' && (
+            <>
+              <button
+                onClick={() => handleStatusTransition('complete')}
+                disabled={transitioning}
+                className="text-sm px-3 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white font-medium disabled:opacity-50 transition-colors"
+              >
+                {transitioning ? 'Updating…' : '✅ Mark Complete'}
+              </button>
+              <Link
+                to={`/orders/${order.id}/edit`}
+                className="text-sm px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              >
+                Edit
+              </Link>
+            </>
+          )}
+          {order.status === 'complete' && (
+            <button
+              onClick={() => handleStatusTransition('returned')}
+              disabled={transitioning}
+              className="text-sm px-3 py-1.5 rounded-lg bg-gray-500 hover:bg-gray-600 text-white font-medium disabled:opacity-50 transition-colors"
+            >
+              {transitioning ? 'Updating…' : '↩ Mark Returned'}
+            </button>
+          )}
           <button
             onClick={handleDelete}
             disabled={deleting}
@@ -79,6 +137,18 @@ export default function OrderDetail() {
           </button>
         </div>
       </div>
+
+      {/* Status note */}
+      {order.status === 'pending' && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-xl px-4 py-3 text-sm text-amber-700 dark:text-amber-400">
+          ⏳ This order is pending — inventory will be deducted when marked Complete.
+        </div>
+      )}
+      {order.status === 'returned' && (
+        <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+          ↩ This order has been returned — all items were restored to inventory.
+        </div>
+      )}
 
       {/* Client info */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-3">
@@ -123,13 +193,15 @@ export default function OrderDetail() {
             </span>
           )}
         </h2>
-
         {!order.items || order.items.length === 0 ? (
           <p className="text-sm text-gray-400 dark:text-gray-500 py-4 text-center">No items on this order</p>
         ) : (
           <div className="space-y-2">
             {order.items.map((oi) => (
-              <div key={oi.id} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-800 last:border-0">
+              <div
+                key={oi.id}
+                className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-800 last:border-0"
+              >
                 <span className="text-sm text-gray-800 dark:text-gray-200 font-medium">{oi.item_name}</span>
                 <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                   {oi.quantity} <span className="font-normal text-gray-400 dark:text-gray-500">{oi.unit}</span>
@@ -140,9 +212,8 @@ export default function OrderDetail() {
         )}
       </div>
 
-      {/* Footer note */}
       <p className="text-xs text-center text-gray-400 dark:text-gray-500">
-        Last updated {formatDate(order.updated_at)} · Deleting this order returns all items to inventory
+        Last updated {formatDate(order.updated_at)}
       </p>
     </div>
   );
