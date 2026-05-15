@@ -6,7 +6,9 @@ import CategoryPage from './pages/CategoryPage';
 import ItemDetail from './pages/ItemDetail';
 import ItemForm from './pages/ItemForm';
 import ManageCategories from './pages/ManageCategories';
+import OrderList from './pages/OrderList';
 import OrderForm from './pages/OrderForm';
+import OrderDetail from './pages/OrderDetail';
 
 function App() {
   return (
@@ -16,7 +18,10 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="category/:slug" element={<CategoryPage />} />
           <Route path="categories" element={<ManageCategories />} />
+          <Route path="orders" element={<OrderList />} />
           <Route path="orders/new" element={<OrderForm />} />
+          <Route path="orders/:id" element={<OrderDetail />} />
+          <Route path="orders/:id/edit" element={<OrderForm />} />
           <Route path="items/new" element={<ItemForm />} />
           <Route path="items/:id" element={<ItemDetail />} />
           <Route path="items/:id/edit" element={<ItemForm />} />

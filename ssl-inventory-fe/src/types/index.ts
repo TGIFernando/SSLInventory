@@ -65,7 +65,10 @@ export interface Order {
   phone: string | null;
   email: string | null;
   address: string | null;
+  delivery_type: 'will_call' | 'install' | null;
+  status: 'pending' | 'complete' | 'returned';
   created_at: string;
   updated_at: string;
+  item_count?: number;
   items?: OrderItem[];
 }

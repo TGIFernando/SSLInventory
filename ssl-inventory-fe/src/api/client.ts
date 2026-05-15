@@ -36,5 +36,8 @@ export const orderApi = {
   getAll: () => api.get('/orders').then((r) => r.data),
   getOne: (id: number) => api.get(`/orders/${id}`).then((r) => r.data),
   create: (data: object) => api.post('/orders', data).then((r) => r.data),
+  update: (id: number, data: object) => api.put(`/orders/${id}`, data).then((r) => r.data),
+  updateStatus: (id: number, status: string) =>
+    api.patch(`/orders/${id}/status`, { status }).then((r) => r.data),
   delete: (id: number) => api.delete(`/orders/${id}`),
 };
