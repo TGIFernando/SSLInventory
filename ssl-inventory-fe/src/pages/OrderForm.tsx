@@ -16,12 +16,6 @@ interface SelectedItem {
 
 type DeliveryType = 'will_call' | 'install';
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: 'short', day: 'numeric', year: 'numeric',
-  });
-}
-
 export default function OrderForm() {
   const { id } = useParams<{ id: string }>();
   const isEdit = Boolean(id);
