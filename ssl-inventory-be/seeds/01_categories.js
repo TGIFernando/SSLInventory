@@ -1,5 +1,11 @@
 exports.seed = async (knex) => {
+  // Clear in reverse dependency order so FK constraints don't block
+  await knex('order_items').del();
+  await knex('orders').del();
+  await knex('transactions').del();
+  await knex('items').del();
   await knex('categories').del();
+
   await knex('categories').insert([
     { name: 'Staging',        slug: 'staging',        icon: '🎭' },
     { name: 'Lighting',       slug: 'lighting',       icon: '💡' },
