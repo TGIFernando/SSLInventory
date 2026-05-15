@@ -50,11 +50,11 @@ export default function Layout() {
           </NavLink>
 
           <NavLink
-            to="/orders/new"
+            to="/orders"
             onClick={() => setSidebarOpen(false)}
             className={({ isActive }) => `${navBase} ${isActive ? navActive : navIdle}`}
           >
-            <span className="text-base">📋</span> Make An Order
+            <span className="text-base">📋</span> Orders
           </NavLink>
 
           <div className="pt-3 pb-1 px-3">
