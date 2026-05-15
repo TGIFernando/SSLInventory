@@ -18,7 +18,6 @@ function formatDate(iso: string) {
   });
 }
 
-/** Check-out IDs that have already been returned via a check-in with a reference_tx_id. */
 function returnedCheckoutIds(transactions: Transaction[]): Set<number> {
   const ids = new Set<number>();
   for (const tx of transactions) {
@@ -34,7 +33,13 @@ export default function ItemDetail() {
   const navigate = useNavigate();
   const [item, setItem] = useState<Item | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [txForm, setTxForm] = useState({ type: 'check_out', quantity: 1, event_name: '', notes: '' });
+  const [txForm, setTxForm] = useState({
+    type: 'check_out',
+    quantity: 1,
+    event_name: '',
+    notes: '',
+    delivery_type: 'will_call' as 'will_call' | 'install',
+  });
   const [selectedCheckout, setSelectedCheckout] = useState<Transaction | null>(null);
   const [txLoading, setTxLoading] = useState(false);
 
@@ -48,7 +53,6 @@ export default function ItemDetail() {
     if (txForm.type !== 'check_in') setSelectedCheckout(null);
   }, [txForm.type]);
 
-  // Check-outs that haven't been linked to a check-in yet
   const returned = returnedCheckoutIds(transactions);
   const outstandingCheckouts = transactions.filter(
     (t) => t.type === 'check_out' && !returned.has(t.id),
@@ -77,8 +81,12 @@ export default function ItemDetail() {
     try {
       await transactionApi.create({
         item_id: item.id,
-        ...txForm,
+        type: txForm.type,
+        quantity: txForm.quantity,
+        event_name: txForm.event_name,
+        notes: txForm.notes,
         reference_tx_id: txForm.type === 'check_in' && selectedCheckout ? selectedCheckout.id : null,
+        delivery_type: txForm.type === 'check_out' ? txForm.delivery_type : null,
       });
       const [updated, txs] = await Promise.all([
         itemApi.getOne(item.id),
@@ -86,7 +94,7 @@ export default function ItemDetail() {
       ]);
       setItem(updated);
       setTransactions(txs);
-      setTxForm({ type: 'check_out', quantity: 1, event_name: '', notes: '' });
+      setTxForm({ type: 'check_out', quantity: 1, event_name: '', notes: '', delivery_type: 'will_call' });
       setSelectedCheckout(null);
     } catch (err: any) {
       alert(err.response?.data?.error ?? 'Transaction failed');
@@ -186,6 +194,34 @@ export default function ItemDetail() {
             />
           </div>
 
+          {/* Will Call / Install toggle — only on check out */}
+          {txForm.type === 'check_out' && (
+            <div className="flex rounded-lg overflow-hidden border border-gray-300 dark:border-gray-600 text-sm font-medium">
+              <button
+                type="button"
+                onClick={() => setTxForm((p) => ({ ...p, delivery_type: 'will_call' }))}
+                className={`flex-1 py-2 transition-colors ${
+                  txForm.delivery_type === 'will_call'
+                    ? 'bg-brand-500 text-white'
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
+              >
+                🚗 Will Call
+              </button>
+              <button
+                type="button"
+                onClick={() => setTxForm((p) => ({ ...p, delivery_type: 'install' }))}
+                className={`flex-1 py-2 border-l border-gray-300 dark:border-gray-600 transition-colors ${
+                  txForm.delivery_type === 'install'
+                    ? 'bg-brand-500 text-white'
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
+              >
+                🔧 Install
+              </button>
+            </div>
+          )}
+
           {/* Outstanding check-out picker */}
           {txForm.type === 'check_in' && (
             <div className="space-y-2">
@@ -220,6 +256,11 @@ export default function ItemDetail() {
                               <span className="text-gray-400 dark:text-gray-500 italic font-normal">No event</span>
                             )}
                           </span>
+                          {tx.delivery_type && (
+                            <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                              {tx.delivery_type === 'will_call' ? '🚗 Will Call' : '🔧 Install'}
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-3 shrink-0 ml-2">
                           <span className={`font-semibold ${isSelected ? 'text-brand-600 dark:text-brand-300' : ''}`}>
@@ -260,13 +301,13 @@ export default function ItemDetail() {
               : txForm.type === 'check_in'
               ? 'Check In'
               : txForm.type === 'check_out'
-              ? 'Check Out'
+              ? `Check Out — ${txForm.delivery_type === 'will_call' ? 'Will Call' : 'Install'}`
               : 'Apply Adjustment'}
           </button>
         </form>
       </div>
 
-      {/* History — shows everything including returned items */}
+      {/* History */}
       {transactions.length > 0 && (
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
           <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">History</h2>
@@ -286,7 +327,11 @@ export default function ItemDetail() {
                   <span className="text-gray-500 dark:text-gray-400 truncate">
                     {tx.event_name || <span className="italic text-gray-300 dark:text-gray-600">no event</span>}
                   </span>
-                  {/* Show "returned" badge on check-outs that have been checked back in */}
+                  {tx.type === 'check_out' && tx.delivery_type && (
+                    <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                      {tx.delivery_type === 'will_call' ? '🚗 Will Call' : '🔧 Install'}
+                    </span>
+                  )}
                   {tx.type === 'check_out' && returned.has(tx.id) && (
                     <span className="shrink-0 text-xs px-1.5 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium">
                       returned

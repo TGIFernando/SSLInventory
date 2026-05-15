@@ -49,6 +49,14 @@ export default function Layout() {
             <span className="text-base">📊</span> Dashboard
           </NavLink>
 
+          <NavLink
+            to="/orders/new"
+            onClick={() => setSidebarOpen(false)}
+            className={({ isActive }) => `${navBase} ${isActive ? navActive : navIdle}`}
+          >
+            <span className="text-base">📋</span> Make An Order
+          </NavLink>
+
           <div className="pt-3 pb-1 px-3">
             <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Categories</p>
           </div>

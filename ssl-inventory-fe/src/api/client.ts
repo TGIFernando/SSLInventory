@@ -31,3 +31,10 @@ export const transactionApi = {
     api.get('/transactions', { params }).then((r) => r.data),
   create: (data: object) => api.post('/transactions', data).then((r) => r.data),
 };
+
+export const orderApi = {
+  getAll: () => api.get('/orders').then((r) => r.data),
+  getOne: (id: number) => api.get(`/orders/${id}`).then((r) => r.data),
+  create: (data: object) => api.post('/orders', data).then((r) => r.data),
+  delete: (id: number) => api.delete(`/orders/${id}`),
+};

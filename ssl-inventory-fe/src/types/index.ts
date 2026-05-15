@@ -31,6 +31,7 @@ export interface Transaction {
   event_name: string | null;
   notes: string | null;
   reference_tx_id: number | null;
+  delivery_type: 'will_call' | 'install' | null;
   created_at: string;
   item_name?: string;
 }
@@ -46,4 +47,25 @@ export interface Stats {
     item_count: number;
     total_quantity: number;
   }>;
+}
+
+export interface OrderItem {
+  id: number;
+  order_id: number;
+  item_id: number;
+  quantity: number;
+  item_name?: string;
+  unit?: string;
+}
+
+export interface Order {
+  id: number;
+  order_name: string;
+  client_name: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  created_at: string;
+  updated_at: string;
+  items?: OrderItem[];
 }

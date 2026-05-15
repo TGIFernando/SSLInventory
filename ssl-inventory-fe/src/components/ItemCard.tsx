@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Item } from '../types';
 
 const conditionColor = {
@@ -14,14 +14,18 @@ interface Props {
 }
 
 export default function ItemCard({ item, onDelete }: Props) {
+  const navigate = useNavigate();
   const isLow = item.quantity <= item.quantity_min;
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex flex-col gap-2 hover:shadow-sm transition-shadow">
+    <div
+      onClick={() => navigate(`/items/${item.id}`)}
+      className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex flex-col gap-2 hover:shadow-md hover:border-brand-400 dark:hover:border-brand-500 transition-all cursor-pointer"
+    >
       <div className="flex items-start justify-between gap-2">
-        <Link to={`/items/${item.id}`} className="font-semibold text-gray-900 dark:text-gray-100 hover:text-brand-600 dark:hover:text-brand-300 leading-tight">
+        <span className="font-semibold text-gray-900 dark:text-gray-100 leading-tight">
           {item.name}
-        </Link>
+        </span>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${conditionColor[item.condition]}`}>
           {item.condition}
         </span>
@@ -40,7 +44,8 @@ export default function ItemCard({ item, onDelete }: Props) {
           {isLow && <span className="ml-1 text-xs text-red-500 font-medium">⚠ Low</span>}
         </div>
 
-        <div className="flex gap-1.5">
+        {/* Buttons stop propagation so they don't trigger the card click */}
+        <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
           <Link
             to={`/items/${item.id}/edit`}
             className="text-xs px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"

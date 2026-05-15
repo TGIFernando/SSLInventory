@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const categoriesRouter = require('./routes/categories');
 const itemsRouter = require('./routes/items');
 const transactionsRouter = require('./routes/transactions');
+const ordersRouter = require('./routes/orders');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -18,6 +19,7 @@ app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 app.use('/api/categories', categoriesRouter);
 app.use('/api/items', itemsRouter);
 app.use('/api/transactions', transactionsRouter);
+app.use('/api/orders', ordersRouter);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);

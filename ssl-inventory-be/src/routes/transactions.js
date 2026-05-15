@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { item_id, type, quantity, event_name, notes, reference_tx_id } = req.body;
+    const { item_id, type, quantity, event_name, notes, reference_tx_id, delivery_type } = req.body;
 
     await db.transaction(async (trx) => {
       const item = await trx('items').where({ id: item_id }).first();
@@ -36,6 +36,7 @@ router.post('/', async (req, res) => {
         event_name: event_name || null,
         notes: notes || null,
         reference_tx_id: reference_tx_id || null,
+        delivery_type: delivery_type || null,
       });
       const tx = await trx('transactions').where({ id }).first();
       res.status(201).json(tx);
