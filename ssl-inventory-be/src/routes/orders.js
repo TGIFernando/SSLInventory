@@ -82,7 +82,7 @@ router.post('/', async (req, res) => {
 
     let result;
     await db.transaction(async (trx) => {
-      const [id] = await trx('orders').insert({
+      const [{ id }] = await trx('orders').insert({
         order_name,
         client_name,
         phone: phone || null,
@@ -90,7 +90,7 @@ router.post('/', async (req, res) => {
         address: address || null,
         delivery_type: delivery_type || null,
         status: 'pending',
-      });
+      }).returning('id');
 
       if (items && items.length > 0) {
         await trx('order_items').insert(

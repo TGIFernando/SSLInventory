@@ -14,7 +14,7 @@ router.post('/', async (req, res) => {
   try {
     const { name, slug, icon } = req.body;
     if (!name || !slug) return res.status(400).json({ error: 'name and slug are required' });
-    const [id] = await db('categories').insert({ name, slug, icon: icon || '📦' });
+    const [{ id }] = await db('categories').insert({ name, slug, icon: icon || '📦' }).returning('id');
     const category = await db('categories').where({ id }).first();
     res.status(201).json(category);
   } catch (err) {

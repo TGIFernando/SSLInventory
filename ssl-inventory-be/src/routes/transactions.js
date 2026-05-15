@@ -29,7 +29,7 @@ router.post('/', async (req, res) => {
       if (newQty < 0) throw new Error('Insufficient stock');
 
       await trx('items').where({ id: item_id }).update({ quantity: newQty, updated_at: trx.fn.now() });
-      const [id] = await trx('transactions').insert({
+      const [{ id }] = await trx('transactions').insert({
         item_id,
         type,
         quantity,
@@ -37,7 +37,7 @@ router.post('/', async (req, res) => {
         notes: notes || null,
         reference_tx_id: reference_tx_id || null,
         delivery_type: delivery_type || null,
-      });
+      }).returning('id');
       const tx = await trx('transactions').where({ id }).first();
       res.status(201).json(tx);
     });

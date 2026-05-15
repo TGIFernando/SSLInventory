@@ -69,9 +69,9 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { category_id, name, description, quantity, quantity_min, unit, condition, location, notes } = req.body;
-    const [id] = await db('items').insert({
+    const [{ id }] = await db('items').insert({
       category_id, name, description, quantity, quantity_min, unit, condition, location, notes,
-    });
+    }).returning('id');
     const item = await db('items').where({ id }).first();
     res.status(201).json(item);
   } catch (err) {
