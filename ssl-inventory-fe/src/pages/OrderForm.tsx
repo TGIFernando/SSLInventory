@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { itemApi, orderApi } from '../api/client';
-import { Item, Order } from '../types';
+import { itemApi, orderApi, transactionApi } from '../api/client';
+import { Item, Order, Transaction } from '../types';
 
 const inputCls =
   'w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500';
@@ -25,6 +25,7 @@ export default function OrderForm() {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [allItems, setAllItems] = useState<Item[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<SelectedItem[]>([]);
   const [form, setForm] = useState({
@@ -38,11 +39,38 @@ export default function OrderForm() {
   const [saved, setSaved] = useState<Order | null>(null);
 
   useEffect(() => {
-    itemApi.getAll().then(setAllItems).catch(() => {});
+    Promise.all([itemApi.getAll(), transactionApi.getAll()])
+      .then(([items, txs]) => {
+        setAllItems(items);
+        setTransactions(txs);
+      })
+      .catch(() => {});
   }, []);
 
   const selectedIds = new Set(selected.map((s) => s.item_id));
 
+  // Count check-outs per item to rank "most used"
+  const usageCount = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const tx of transactions) {
+      if (tx.type === 'check_out') {
+        counts[tx.item_id] = (counts[tx.item_id] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [transactions]);
+
+  // When no search: all unselected items sorted by usage desc
+  const defaultList = useMemo(
+    () =>
+      allItems
+        .filter((i) => !selectedIds.has(i.id))
+        .sort((a, b) => (usageCount[b.id] || 0) - (usageCount[a.id] || 0)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allItems, selected, usageCount],
+  );
+
+  // When searching: filter by name
   const searchResults = search.trim()
     ? allItems
         .filter(
@@ -50,8 +78,8 @@ export default function OrderForm() {
             !selectedIds.has(i.id) &&
             i.name.toLowerCase().includes(search.toLowerCase()),
         )
-        .slice(0, 8)
-    : [];
+        .slice(0, 10)
+    : defaultList;
 
   const addItem = (item: Item) => {
     setSelected((prev) => [
@@ -101,10 +129,8 @@ export default function OrderForm() {
           </p>
         </div>
 
-        {/* Order summary */}
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-3">
           <h3 className="font-semibold text-gray-900 dark:text-gray-100">Order Summary</h3>
-
           <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
             {saved.phone && (
               <>
@@ -125,7 +151,6 @@ export default function OrderForm() {
               </>
             )}
           </div>
-
           {saved.items && saved.items.length > 0 && (
             <div className="border-t border-gray-100 dark:border-gray-800 pt-3 space-y-1.5">
               <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-2">Items</p>
@@ -143,7 +168,11 @@ export default function OrderForm() {
 
         <div className="flex gap-3">
           <button
-            onClick={() => { setSaved(null); setSelected([]); setForm({ order_name: '', client_name: '', phone: '', email: '', address: '' }); }}
+            onClick={() => {
+              setSaved(null);
+              setSelected([]);
+              setForm({ order_name: '', client_name: '', phone: '', email: '', address: '' });
+            }}
             className="flex-1 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
           >
             New Order
@@ -162,7 +191,6 @@ export default function OrderForm() {
   /* ── Form ── */
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      {/* Header */}
       <div>
         <button
           onClick={() => navigate(-1)}
@@ -178,7 +206,6 @@ export default function OrderForm() {
         {/* Client / order details */}
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-5 space-y-4">
           <h2 className="font-semibold text-gray-900 dark:text-gray-100">Order Details</h2>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -193,7 +220,6 @@ export default function OrderForm() {
                 className={inputCls}
               />
             </div>
-
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                 Client Name <span className="text-red-500">*</span>
@@ -207,7 +233,6 @@ export default function OrderForm() {
                 className={inputCls}
               />
             </div>
-
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Phone</label>
               <input
@@ -218,7 +243,6 @@ export default function OrderForm() {
                 className={inputCls}
               />
             </div>
-
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Email</label>
               <input
@@ -229,7 +253,6 @@ export default function OrderForm() {
                 className={inputCls}
               />
             </div>
-
             <div className="sm:col-span-2">
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Address / Venue</label>
               <input
@@ -260,10 +283,10 @@ export default function OrderForm() {
             <input
               ref={searchRef}
               type="text"
-              placeholder="Search inventory items…"
+              placeholder="Search items or browse below…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg pl-9 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
             {search && (
               <button
@@ -276,46 +299,55 @@ export default function OrderForm() {
             )}
           </div>
 
-          {/* Search results */}
-          {searchResults.length > 0 && (
-            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-100 dark:divide-gray-800">
-              {searchResults.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => addItem(item)}
-                  className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-gray-900 hover:bg-brand-50 dark:hover:bg-brand-900/20 text-left transition-colors group"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate group-hover:text-brand-700 dark:group-hover:text-brand-300">
-                      {item.name}
-                    </p>
-                    {item.category_name && (
-                      <p className="text-xs text-gray-400 dark:text-gray-500">{item.category_name}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0 ml-3">
-                    <span className={`text-sm font-semibold ${item.quantity <= item.quantity_min ? 'text-red-500' : 'text-gray-700 dark:text-gray-300'}`}>
-                      {item.quantity} {item.unit}
-                    </span>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                      + Add
-                    </span>
-                  </div>
-                </button>
-              ))}
+          {/* Item list (search results or full sorted list) */}
+          {searchResults.length > 0 ? (
+            <div>
+              {!search.trim() && (
+                <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-2">
+                  {usageCount[searchResults[0]?.id] ? 'Most Used First' : 'All Items'}
+                </p>
+              )}
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden divide-y divide-gray-100 dark:divide-gray-800 max-h-72 overflow-y-auto">
+                {searchResults.map((item) => {
+                  const uses = usageCount[item.id] || 0;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => addItem(item)}
+                      className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-gray-900 hover:bg-brand-50 dark:hover:bg-brand-900/20 text-left transition-colors group"
+                    >
+                      <div className="min-w-0 flex items-center gap-2">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate group-hover:text-brand-700 dark:group-hover:text-brand-300">
+                            {item.name}
+                          </p>
+                          {item.category_name && (
+                            <p className="text-xs text-gray-400 dark:text-gray-500">{item.category_name}</p>
+                          )}
+                        </div>
+                        {uses > 0 && !search.trim() && (
+                          <span className="shrink-0 text-xs px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium">
+                            ×{uses}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-3">
+                        <span className={`text-sm font-semibold ${item.quantity <= item.quantity_min ? 'text-red-500' : 'text-gray-700 dark:text-gray-300'}`}>
+                          {item.quantity} {item.unit}
+                        </span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                          + Add
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          )}
-
-          {search.trim() && searchResults.length === 0 && (
+          ) : (
             <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-3">
-              No items found for "{search}"
-            </p>
-          )}
-
-          {!search.trim() && selected.length === 0 && (
-            <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-4">
-              Start typing above to search and add items
+              {allItems.length === 0 ? 'Loading inventory…' : `No items match "${search}"`}
             </p>
           )}
 
@@ -379,7 +411,9 @@ export default function OrderForm() {
           disabled={loading || !form.order_name.trim() || !form.client_name.trim()}
           className="w-full bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-semibold py-3 rounded-lg transition-colors"
         >
-          {loading ? 'Creating Order…' : `Create Order${selected.length > 0 ? ` (${selected.length} item${selected.length !== 1 ? 's' : ''})` : ''}`}
+          {loading
+            ? 'Creating Order…'
+            : `Create Order${selected.length > 0 ? ` (${selected.length} item${selected.length !== 1 ? 's' : ''})` : ''}`}
         </button>
       </form>
     </div>
