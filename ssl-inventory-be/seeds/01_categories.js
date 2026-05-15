@@ -1,5 +1,4 @@
 exports.seed = async (knex) => {
-  // Clear in reverse dependency order so FK constraints don't block
   await knex('order_items').del();
   await knex('orders').del();
   await knex('transactions').del();
@@ -7,12 +6,15 @@ exports.seed = async (knex) => {
   await knex('categories').del();
 
   await knex('categories').insert([
-    { name: 'Staging',        slug: 'staging',        icon: '🎭' },
-    { name: 'Lighting',       slug: 'lighting',       icon: '💡' },
-    { name: 'Tables',         slug: 'tables',         icon: '🪵' },
-    { name: 'Chairs',         slug: 'chairs',         icon: '🪑' },
-    { name: 'Carpet',         slug: 'carpet',         icon: '🟫' },
-    { name: 'Drape',          slug: 'drape',          icon: '🎪' },
-    { name: 'Miscellaneous',  slug: 'miscellaneous',  icon: '📦' },
+    { name: 'Stage Tops',    slug: 'stage-tops',    icon: '🎭' },
+    { name: 'Braces',        slug: 'braces',        icon: '🔩' },
+    { name: 'Skirting',      slug: 'skirting',      icon: '🪵' },
+    { name: 'Lighting',      slug: 'lighting',      icon: '💡' },
+    { name: 'Carpet',        slug: 'carpet',        icon: '🟫' },
+    { name: 'Electricity',   slug: 'electricity',   icon: '⚡' },
+    { name: 'Chairs',        slug: 'chairs',        icon: '🪑' },
+    { name: 'Tables',        slug: 'tables',        icon: '🪵' },
+    { name: 'Drape',         slug: 'drape',         icon: '🎪' },
+    { name: 'Misc',          slug: 'misc',          icon: '📦' },
   ]);
 };
